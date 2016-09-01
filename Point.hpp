@@ -32,6 +32,11 @@ struct Point {
 		dval(0),
 		drw(1)
 	{}
+	template <class inputIt> Point(inputIt beg, inputIt past, double & val):
+		dcomp(beg,past),
+		dval(val),
+		drw(1)
+	{}
 	Point(std::size_t const & n, Cor c):
 		dcomp(n,c),
 		dval(0),
@@ -44,6 +49,7 @@ struct Point {
 	Cit begin() const {return dcomp.begin();};
 	It end() {return dcomp.end();};
 	Cit end() const {return dcomp.end();};
+	void push_back(double & val) {dcomp.push_back(val);};
 	void val(Val const & in) {dval=in;};
 	Val const & val() const {return dval;};
 	void rw(Rw const & in) {drw=in;};

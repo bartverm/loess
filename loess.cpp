@@ -51,7 +51,7 @@ typedef K_inc_neighbor_search::iterator Piterator; //The search iterator
 typedef K_inc_neighbor_search::Point_with_transformed_distance P_with_dist; //Return type of searcher
 struct Point_rw_not_zero{
 	bool operator() (const Piterator& it){
-		return (!isfinite(it->first.val()) || it->first.rw()==0); //functor to exclude points with rw == 0
+		return it->first.rw()==0; //functor to exclude points with rw == 0
 	}
 };
 typedef CGAL::Filter_iterator< Piterator, Point_rw_not_zero > P_pos_rw_it; // construct filtered iterator
@@ -59,7 +59,9 @@ typedef CGAL::Filter_iterator< Piterator, Point_rw_not_zero > P_pos_rw_it; // co
 
 void loess(vector< Point > &,const vector< Point >&, vector< double > &, mwSize, mwSize, mwSize, mwSize);
 
-void triCube(vector< P_with_dist >::const_iterator,vector< P_with_dist >::const_iterator,  vector<double>::iterator);
+typedef std::vector< P_with_dist >::const_iterator regpoints_iit;
+typedef std::back_insert_iterator< std::vector< double > > weights_oit;
+void triCube(regpoints_iit, regpoints_iit, weights_oit);
 
 void biCube(Tree const & tree, const vector< double > &);
 
@@ -140,14 +142,24 @@ void mexFunction(int nlhs,mxArray *plhs[],int nrhs, const mxArray * prhs[]){
 	//Transfor vars into vectors
 	vector< Point > inpoints, outpoints;
 	vector< double > valsout;
-	inpoints.resize(nin,Point(nd,0));
+	//inpoints.resize(nin,Point(nd,0));
 	outpoints.resize(nout,Point(nd,0));
-	valsout.resize(nout,0);
+	valsout.resize(nout,std::numeric_limits<double>::quiet_NaN() );
 	for (mwSize cin=0; cin < nin; cin++){
-		inpoints[cin].val(v[cin]);
-		for (mwSize cd=0; cd < nd; cd++){
-			inpoints[cin][cd]=x[cd*nin+cin];
+		if (!std::isfinite(v[cin]))
+			continue;
+		Point tmpPoint(nd,0);
+		tmpPoint.val(v[cin]);
+		bool point_is_finite=true;
+		for (mwSize cd=0; (cd < nd) & point_is_finite; cd++){
+			if (!std::isfinite(x[cd*nin+cin])){
+				point_is_finite=false;
+				continue;
+			}
+			tmpPoint[cd]=(x[cd*nin+cin]);
 		}
+		if (point_is_finite)
+			inpoints.push_back(tmpPoint);
 	}
 	for (mwSize co=0; co<nout; co++){
 		for (mwSize cd=0; cd < nd; cd++) {
@@ -156,7 +168,11 @@ void mexFunction(int nlhs,mxArray *plhs[],int nrhs, const mxArray * prhs[]){
 	}
 
 	//Make span
-	q=static_cast<mwSize>(floor(*span * static_cast<double> (nin)));
+	if (*span > 1)
+		q=static_cast<mwSize>(floor(*span));
+	else
+		q=static_cast<mwSize>(floor(*span * static_cast<double> (nin)));
+	
 	q=max(static_cast<mwSize>(3),min(nin,q));
 
 	//Perform computation
@@ -203,7 +219,8 @@ void loess(vector< Point > & inpoints,const vector < Point > & outpoints, vector
     std::cout << "\rDone.      " << std::endl;
 }
 
-void triCube(vector< P_with_dist >::const_iterator pd_begin, vector< P_with_dist >::const_iterator pd_end,  vector<double>::iterator w_it) {
+
+void triCube(regpoints_iit pd_begin, regpoints_iit pd_end,  weights_oit w_it) {
 	// Computes regression weights
 	double arg=0;
 	for (auto pd_it=pd_begin; pd_it != pd_end; pd_it++){
@@ -238,31 +255,44 @@ void parFit(const Tree & tree, vector< Point >::const_iterator qp_begin, vector<
 // 		n:		   number of terms in regression (not modified)
 // 		order:	   order of regression (not modified)
 // 		prog:	   to keep track of progress, between 0 and 1 (modified)
-
 	// Initialize variable
-	vector< P_with_dist > regpoints(q); // holds nearest neighbor search results
-	vector< double > w(q); 				// hold regression weights
 	mwSize ndims=qp_begin->dims();      // number of dimensions
 
-	// Eigen matrices for regression
-	Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> A(q,n); // Regression matrix
-	Eigen::Matrix<double, Eigen::Dynamic, 1> x(n,1);		      // Regression result vector
-	Eigen::Matrix<double, Eigen::Dynamic, 1> b(q,1);              // Known values for regression
-
+	
 	// Search for N-nearest neighbors and perform regression
 	for (auto qp_it = qp_begin; qp_it != qp_end; qp_it++){ // loop over all query points
+		bool point_is_finite=true;
+		for (auto c_it = qp_it->begin(); c_it != qp_it->end(); c_it++)
+			if (!std::isfinite(*c_it))
+				point_is_finite=false;
+		if (!point_is_finite){
+			++val_beg;
+			continue;
+		}
 		K_inc_neighbor_search ins (tree,*qp_it); //Create incremental searcher
 		P_pos_rw_it it(ins.end(), Point_rw_not_zero(), ins.begin()), end(ins.end(), Point_rw_not_zero()); //filtered iterator to exclude non-finite values and nan-values
+		vector< P_with_dist > regpoints; // holds nearest neighbor search results
 
 		// Copy N-nearest points to current query point
-		for (mwSize cc=0; cc < q && it!=end; cc++)
-			regpoints[cc]=*(it++);// store filtered nearest neighbors
-
+		for (mwSize cc=0; cc < q && it!=end; cc++){
+			regpoints.push_back(*it);// store filtered nearest neighbors
+			it++;
+		}
+		
+		if (regpoints.size() < n){
+			++val_beg;
+			continue;
+		}		
 		// Compute weights for regression
-		triCube(regpoints.begin(), regpoints.end(), w.begin());
-
+		vector< double > w; 				// hold regression weights
+		triCube(regpoints.cbegin(), regpoints.cend(), std::back_inserter(w));
+		
+		// Eigen matrices for regression
+		Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> A(regpoints.size(),n); // Regression matrix
+		Eigen::Matrix<double, Eigen::Dynamic, 1> x(n,1);		      // Regression result vector
+		Eigen::Matrix<double, Eigen::Dynamic, 1> b(regpoints.size(),1);              // Known values for regression
 		// Fill EIGEN matrices and perform regression
-		for (mwSize cc=0; cc < q; cc++) { // loop over points to regress
+		for (mwSize cc=0; cc < regpoints.size(); cc++) { // loop over points to regress
 			A(cc,0)=w[cc]; // Term 1: Intercept, i.e. 1*weight (zero-th order)
 			b(cc,0)=regpoints[cc].first.val()*w[cc]; // Known value, i.e. value * weight
 			for (mwSize cd=0; cd < ndims ; cd++)  // Regression terms (1st order)
@@ -310,26 +340,27 @@ void localFit(const Tree & tree, const vector< Point > & qp, mwSize q, vector<do
 		for (mwSize cd=1; cd < ndims + 1; cd++)
 			n += cd; // cross-products (1 + 2 + ... + ndims)
 
+	mwSize usedthreads = nthreads>nin ? nin : nthreads; // Reduce the number of threads when there are less query points than threads
 	// Compute number of points in each each computational thread
-	vector< mwSize > n_in_thread(nthreads,nin/nthreads); // Number of threads is equal to the integral division of number of points and threads
-	for (mwSize cr=0; cr < nin % nthreads; cr++)         // Remaining point (modulo) are spread over the threads
+	vector< mwSize > n_in_thread(usedthreads,nin/usedthreads); // Number of threads is equal to the integral division of number of points and threads
+	for (mwSize cr=0; cr < nin % usedthreads; cr++)         // Remaining point (modulo) are spread over the threads
 		n_in_thread[cr]++;
 
 	// Start computation in threads asynchronously
-	vector<double> prog_th(nthreads,0); 			 // Vector holding progress (between 0 and 1) of each computation thread
+	vector<double> prog_th(usedthreads,0); 			 // Vector holding progress (between 0 and 1) of each computation thread
 	std::vector< std::future < void > > all_futures; // Vector with one feature per thread
 	mwSize total=0; 								 // Keeps track of points passed to previous threads
-	for (mwSize cth = 0; cth<nthreads; cth++){       // Loop to launch computations asynchronously
+	for (mwSize cth = 0; cth<usedthreads; cth++){       // Loop to launch computations asynchronously
 		all_futures.push_back( std::async( std::launch::async, parFit, std::ref(tree), qp.begin()+total, qp.begin()+total+n_in_thread[cth], val.begin()+total, q, n ,order, std::ref(prog_th[cth]) ) ); // Start thread
 		total += n_in_thread[cth];	// Keep track of points already passed to the function
 	}
 
 	// Check status of threads every second
 	std::future_status status;
-	for (mwSize cth = 0; cth < nthreads; cth++){ // Check status of each thread
+	for (mwSize cth = 0; cth < usedthreads; cth++){ // Check status of each thread
 		do {
 			status = all_futures[cth].wait_for(std::chrono::seconds(1)); // Wait for 1 second, or for thread ending (whichever comes first)
-			prog = std::accumulate(prog_th.begin(),prog_th.end(),0.0)/double(nthreads); // Compute current progress of threads
+			prog = std::accumulate(prog_th.begin(),prog_th.end(),0.0)/double(usedthreads); // Compute current progress of threads
 		} while (status != std::future_status::ready); // Repeat loop until thread ended successfully
 	}
 
