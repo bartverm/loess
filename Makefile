@@ -1,6 +1,12 @@
 all: loess.mexa64
 
+<<<<<<< HEAD
 MATLAB_PATH=/usr/local/MATLAB/R2016a
+=======
+ifndef MATLAB_PATH
+MATLAB_PATH=/usr/local/MATLAB/R2015a
+endif
+>>>>>>> f11bb2e790cac8c699cfde67d8b728ba16586727
 
 loess.o: loess.cpp
 	g++ -c  -I$(MATLAB_PATH)/extern/include -I$(MATLAB_PATH)/simulink/include -DMATLAB_MEX_FILE -ansi -D_GNU_SOURCE -fPIC -fno-omit-frame-pointer -pthread -fstack-protector --param=ssp-buffer-size=4 -Wformat -Wformat-security -std=c++11 -frounding-math -O3 -DNDEBUG -pedantic -Wall  -O -DNDEBUG  "loess.cpp"	
