@@ -70,7 +70,7 @@ double median(vector< double >);
 
 
 void mexFunction(int nlhs,mxArray *plhs[],int nrhs, const mxArray * prhs[]){
-   	mwSize nin,nd,nout,q,niter=0, order=1, nthreads=1;
+   	mwSize nin,nd,nout,q,niter=0, order=1, nthreads=thread::hardware_concurrency() ;
 	double * span=0, *x,*v,*xi,*vi;
 	if (nrhs < 4)
 		mexErrMsgIdAndTxt("loess:nargin","At least 4 arguments are required");
