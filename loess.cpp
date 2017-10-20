@@ -34,7 +34,7 @@
 #include <math.h>
 #include <algorithm>
 #include <iterator>
-#include <eigen3/Eigen/Dense>
+#include <Eigen/Dense>
 #include <thread>
 #include <functional>
 #include <future>
