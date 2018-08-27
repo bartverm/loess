@@ -1,7 +1,7 @@
 all: loess.mexa64
 
 ifndef MATLAB_PATH
-MATLAB_PATH=/usr/local/MATLAB/R2016a
+MATLAB_PATH=/usr/local/MATLAB/R2018a
 endif
 
 loess.o: loess.cpp

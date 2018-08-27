@@ -86,7 +86,7 @@ void mexFunction(int nlhs,mxArray *plhs[],int nrhs, const mxArray * prhs[]){
 		mexErrMsgIdAndTxt("loess:nd","Third input (query points) should have same number of columns as first input (locations)");
 	if ( mxGetN( prhs[1] ) != 1)
 		mexErrMsgIdAndTxt("loess:notColumnV","Second input should be a column vector");
-	if ( !( mxIsDouble( prhs[0] ) && mxIsDouble( prhs[1] ) && mxIsDouble( prhs[2] ) && mxIsDouble( prhs[3] ) && mxIsDouble( prhs[4] ) ) )
+	if ( !( mxIsDouble( prhs[0] ) && mxIsDouble( prhs[1] ) && mxIsDouble( prhs[2] ) && mxIsDouble( prhs[3] )  ) )
 		mexErrMsgIdAndTxt("loess:isdouble","All input arguments should be of type Double");
 	if ( mxGetNumberOfElements( prhs[3] ) != 1 )
 		mexErrMsgIdAndTxt("loess:spanNotScalar","Fourth argument should be a scalar");
@@ -202,7 +202,8 @@ void loess(vector< Point > & inpoints,const vector < Point > & outpoints, vector
 	    do {
 	    	status = f.wait_for(std::chrono::seconds(1));
 	    	prog = (double(citer) + prog_lf) * frac_riter;
-	    	std::cout << "\r" << prog*100 << "%" << std::flush;
+            mexPrintf("\r%10.2f%%", prog*100);
+	    	//std::cout << "\r" << prog*100 << "%" << std::flush;
 	    } while (status != std::future_status::ready);
 	    biCube(tree,vals_reg); // Compute robust weights (This is not included in computation of progress)
 	}
@@ -214,7 +215,8 @@ void loess(vector< Point > & inpoints,const vector < Point > & outpoints, vector
     do {
     	status = f.wait_for(std::chrono::seconds(1));
     	prog = prog_lf * frac_interp + double(niter) * frac_riter;
-    	std::cout << "\r" << prog*100 << "%" << std::flush;
+        mexPrintf("\r%10.2f%%", prog*100);
+    	//std::cout << "\r" << prog*100 << "%" << std::flush;
     } while (status != std::future_status::ready);
     std::cout << "\rDone.      " << std::endl;
 }
