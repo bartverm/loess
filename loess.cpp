@@ -30,7 +30,8 @@
 #include <CGAL/Search_traits.h>
 #include <CGAL/Orthogonal_incremental_neighbor_search.h>
 #include <CGAL/iterator.h>
-#include "mex.h"
+#include "mex.hpp"
+#include "mexAdapter.hpp"
 #include <math.h>
 #include <algorithm>
 #include <iterator>
@@ -42,6 +43,12 @@
 
 using namespace std;
 
+class mexFunction : public matlab::mex::Function {
+	public:
+		void operator()(matlab::mex::ArgumentList outputs, matlab::mex::ArgumentList inputs){
+			
+		}
+};
 extern void main_();
 
 typedef CGAL::Search_traits<double, Point, Point::Cit, Construct_coord_iterator> Traits; // search traits
