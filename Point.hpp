@@ -14,8 +14,8 @@ struct Point {
 	typedef std::vector<Cor>::const_iterator Cit;
 	
 	std::vector<Cor> dcomp;
-	Val dval;
-	Rw drw;
+	Val dval=0;
+	Rw drw=1;
 
 	Point():
 		dcomp(),

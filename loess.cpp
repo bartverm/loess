@@ -169,9 +169,9 @@ void mexFunction(int nlhs,mxArray *plhs[],int nrhs, const mxArray * prhs[]){
 
 	//Make span
 	if (*span > 1)
-		q=static_cast<mwSize>(floor(*span));
+		q=static_cast<mwSize>(round(*span));
 	else
-		q=static_cast<mwSize>(floor(*span * static_cast<double> (nin)));
+		q=static_cast<mwSize>(round(*span * static_cast<double> (nin)));
 	
 	q=max(static_cast<mwSize>(3),min(nin,q));
 
@@ -202,7 +202,7 @@ void loess(vector< Point > & inpoints,const vector < Point > & outpoints, vector
 	    do {
 	    	status = f.wait_for(std::chrono::seconds(1));
 	    	prog = (double(citer) + prog_lf) * frac_riter;
-            mexPrintf("\r%10.2f%%", prog*100);
+                //mexPrintf("\r%10.2f%%", prog*100);
 	    	//std::cout << "\r" << prog*100 << "%" << std::flush;
 	    } while (status != std::future_status::ready);
 	    biCube(tree,vals_reg); // Compute robust weights (This is not included in computation of progress)
@@ -215,10 +215,10 @@ void loess(vector< Point > & inpoints,const vector < Point > & outpoints, vector
     do {
     	status = f.wait_for(std::chrono::seconds(1));
     	prog = prog_lf * frac_interp + double(niter) * frac_riter;
-        mexPrintf("\r%10.2f%%", prog*100);
+        //mexPrintf("\r%10.2f%%", prog*100);
     	//std::cout << "\r" << prog*100 << "%" << std::flush;
     } while (status != std::future_status::ready);
-    std::cout << "\rDone.      " << std::endl;
+    //std::cout << "\rDone.      " << std::endl;
 }
 
 
@@ -227,7 +227,7 @@ void triCube(regpoints_iit pd_begin, regpoints_iit pd_end,  weights_oit w_it) {
 	double arg=0;
 	for (auto pd_it=pd_begin; pd_it != pd_end; pd_it++){
 		arg=pd_it->second / (pd_end-1)->second;
-		*w_it = pd_it->first.rw() * ( (arg < 1) ? pow(1 - pow(arg,1.5),3) : 0);
+		*w_it = pd_it->first.rw() * ( (arg < 1) ? pow(1 - pow(arg,1.5),1.5) : 0); // This is tricube, but distances are given squared, and we want to use the square of the weights in weighted regression hence twice the 1.5 exponent
 		++w_it;
 	}
 }
@@ -240,9 +240,11 @@ void biCube(Tree const & tree, const vector<double> & vals_reg ){
 	for (std::size_t cp=0; cp<static_cast<std::size_t>(tree.size()); cp++)
 		res[cp]=abs((tree.begin()+cp)->val()-vals_reg[cp]);
 	double sixmres=6*median(res);
+	auto tit=tree.begin();
 	for (std::size_t cp=0; cp<static_cast<std::size_t>(tree.size()); cp++){
 		arg=res[cp]/sixmres;
-		const_cast<Point*> (&(*(tree.begin()+cp)))->rw( (arg < 1) ? pow(1-pow(arg,2),2) : 0 ); //const_cast shouldn't do any harm here
+		const_cast<Point *> (&(*tit))->rw( (arg < 1) ? 1-pow(arg,2) : 0 ); //const_cast shouldn't do any harm here. Second square is removed since we use square root of weights in regression
+		tit++;
 	}
 }
 
@@ -295,23 +297,18 @@ void parFit(const Tree & tree, vector< Point >::const_iterator qp_begin, vector<
 		Eigen::Matrix<double, Eigen::Dynamic, 1> b(regpoints.size(),1);              // Known values for regression
 		// Fill EIGEN matrices and perform regression
 		for (mwSize cc=0; cc < regpoints.size(); cc++) { // loop over points to regress
-			A(cc,0)=w[cc]; // Term 1: Intercept, i.e. 1*weight (zero-th order)
-			b(cc,0)=regpoints[cc].first.val()*w[cc]; // Known value, i.e. value * weight
+			A(cc,0)=w[cc]; // Term 1: Intercept, i.e. 1
+			b(cc,0)=regpoints[cc].first.val()*w[cc]; // Known value
 			for (mwSize cd=0; cd < ndims ; cd++)  // Regression terms (1st order)
-				A(cc,cd+1)=w[cc]*(regpoints[cc].first[cd]-(*qp_it)[cd]); // Terms are weighed centered coordinates
+				A(cc,cd+1)=w[cc]*(regpoints[cc].first[cd]-(*qp_it)[cd]); // Terms are centered coordinates
 			if (order==2){ // Quadratic terms (2nd order), i.e. all cross products
 				mwSize cpos=ndims+1; // Term number in matrix (column number)
 				for (mwSize cd1=0; cd1<ndims; cd1++) // Loop over dimension
 					for (mwSize cd2=cd1; cd2 < ndims; cd2++ ) // Loop from outer loop dimension to number of dimensions
-						A(cc, cpos++)=w[cc] * (regpoints[cc].first[cd1]-(*qp_it)[cd1]) * (regpoints[cc].first[cd2]-(*qp_it)[cd2]); // Assign cross-products (centered and weighed)
+						A(cc, cpos++)=w[cc]*((regpoints[cc].first[cd1]-(*qp_it)[cd1]) * (regpoints[cc].first[cd2]-(*qp_it)[cd2])); // Assign cross-products (centered and weighed)
 			}
 		}
-
-		//x=A.fullPivLu().solve(b);//perform regression
-		 // x=A.fullPivHouseholderQr().solve(b);//perform regression
-		//x=A.colPivHouseholderQr().solve(b);//perform regression
-		//x=A.householderQr().solve(b);
-		x=A.jacobiSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(b); // Perform least squares regression
+		x=A.bdcSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(b); // Perform weighted least squares regression. Note the weights get squared in here
 		* val_beg = x(0,0); // store result
 		++val_beg;	// Increase pointer to output values
 		prog = double(std::distance(qp_begin,qp_it))/double(std::distance(qp_begin,qp_end)); // keep track of progress
@@ -369,15 +366,19 @@ void localFit(const Tree & tree, const vector< Point > & qp, mwSize q, vector<do
 } // end of localFit
 
 
-
-double median(vector<double> vec)
+double median(vector<double> v) // vector copied to avoid modifications on it
 {
-	// Computes approxiamte median of elements in a vector
-	//  Input:
-	//   vec: Vector with values to compute the median.
-	//        The vector is copied since it should not be modified
-	vector<double>::size_type mid(vec.size()/2); // compute half the size of the matrix (rounded to zero)
-	nth_element (vec.begin(), vec.begin()+mid, vec.end()); // Find median element
-	return vec[mid]; // Return median element
+  if(v.empty()) {
+    return 0.0;
+  }
+  auto n = v.size() / 2;
+  nth_element(v.begin(), v.begin()+n, v.end());
+  auto med = v[n];
+  if(!(v.size() & 1)) { //If the set size is even
+    auto max_it = max_element(v.begin(), v.begin()+n);
+    med = (*max_it + med) / 2.0;
+  }
+  return med;    
 }
+
 

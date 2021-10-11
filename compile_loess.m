@@ -11,5 +11,5 @@ if ispc
         '-lmwbuiltinsutil',...
         'loess.cpp')
 elseif isunix
-    mex('-lmwservices','-lmwbuiltinsutil','loess.cpp') % Make sure all libraries are installed
+    mex CXXFLAGS='$CXXFLAGS -Wall -std=c++17' -DCGAL_EIGEN3_ENABLED -I/usr/include/eigen3/ loess.cpp
 end
