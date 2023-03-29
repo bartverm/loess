@@ -1,4 +1,4 @@
-clearvars
+function compile_loess()
 
 if ispc
     mex('-I C:\dev\eigen-eigen-5a0156e40feb',...        % Eigen headers
@@ -11,5 +11,7 @@ if ispc
         '-lmwbuiltinsutil',...
         'loess.cpp')
 elseif isunix
-    mex CXXFLAGS='$CXXFLAGS -Wall -std=c++17' -DCGAL_EIGEN3_ENABLED -I/usr/include/eigen3/ loess.cpp
+    mex -v CXXFLAGS='$CXXFLAGS -Wall -std=c++17' -DCGAL_EIGEN3_ENABLED -I/usr/include/eigen3/  loess.cpp
+end
+
 end
