@@ -11,7 +11,7 @@ if ispc
         '-lmwbuiltinsutil',...
         'loess.cpp')
 elseif isunix
-    mex -v CXXFLAGS='$CXXFLAGS -Wall -std=c++17' -DCGAL_EIGEN3_ENABLED -I/usr/include/eigen3/  loess.cpp
+    mex -v CXXFLAGS='$CXXFLAGS -Wall -std=c++17 -static' -DCGAL_EIGEN3_ENABLED -DMATLAB_MEXCMD_RELEASE=R2017b -I/usr/include/eigen3/  loess.cpp
 end
 
 end
