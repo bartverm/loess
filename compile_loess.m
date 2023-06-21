@@ -11,7 +11,11 @@ if ispc
         '-lmwbuiltinsutil',...
         'loess.cpp')
 elseif isunix
-    mex -v CXXFLAGS='$CXXFLAGS -Wall -std=c++17' -DCGAL_EIGEN3_ENABLED -DMATLAB_MEXCMD_RELEASE=R2017b -I/usr/include/eigen3/  loess.cpp
+    if exist('/usr/bin/gcc-10','file')
+        mex -v GCC='/usr/bin/gcc-10' CXXFLAGS='$CXXFLAGS -Wall -std=c++17' -DCGAL_EIGEN3_ENABLED -DMATLAB_MEXCMD_RELEASE=R2017b -I/usr/include/eigen3/  loess.cpp
+    else
+        mex -v CXXFLAGS='$CXXFLAGS -Wall -std=c++17' -DCGAL_EIGEN3_ENABLED -DMATLAB_MEXCMD_RELEASE=R2017b -I/usr/include/eigen3/  loess.cpp
+    end
 end
 
 end
